@@ -1407,3 +1407,34 @@ No batch uses it yet: whether it decides the next batch, and Whisper guards, is 
   - **The male /ʃ/ centroid**, overshot by batch 2 (3.48 kHz, men 3.13).
   - **A diagnostic:** the voice lacks 1–4 kHz presence after batch 1 (female 1–2 kHz −16.1 dB re
     0–8 kHz, women −10.8). That is a spectral shape to fix, not a tilt.
+
+## Miku preset register correction (2026-11-09)
+
+The owner heard the first Miku preset as too low. This is a browser preset adjustment toward
+the requested synthetic character, separate from the natural-voice hill-climb batches above.
+The acoustic engine, calibrated tables and comparison judges are unchanged.
+
+- Hypothesis: C4 startup and the adult-female A3-based keyboard/demo register were too low;
+  the mostly adult tract also retained a heavier resonance pattern.
+- Change: startup C4 → G4, keyboard A3 → C4, demos up seven semitones (live MIDI stays at
+  concert pitch). Female/child blend 85/15 → 55/45. Pressure 8 → 7, tension .65 → .60,
+  brightness .70 → .65 (also tried .85), breathiness .06 → .03, glide 25 → 12 ms,
+  sung vibrato 18 → 12 cents.
+- Measurement: 48 kHz wasm, one second of the same neutral vowel. Settled F0 261.63 →
+  392.00 Hz; tract length 14.18 → 13.25 cm; transfer-function F1/F2/F3
+  607/1830/2837 → 642/1944/3063 Hz. Output RMS .204 → .187, peak .568 → .551;
+  voicing remained 1.00. Thus the register and resonances rose without simply turning it up.
+- Local before/after vowel and original-song renders are in `out/miku-calibration/` (ignored).
+  These measurements verify the requested higher register, not perceptual identity with a
+  Vocaloid voicebank.
+- The owner supplied the official [Miku V6 English demo](https://www.youtube.com/watch?v=Aut5VO6mz1g)
+  and requested `yt-dlp`. Downloaded it locally, then used a repeating-background mask and
+  pYIN at 16 kHz (180–1000 Hz; voiced probability > .2; RMS above the clip's first quartile).
+  Only 991/7377 reference frames passed: residual accompaniment makes this approximate.
+  Accepted-frame pitch median: reference 423 Hz, old demo 264 Hz, final demo 428 Hz.
+  These are different melodies, so the comparison guides register, not note accuracy.
+- Diagnostic energy shares below 1 kHz / 1–4 kHz / 4–8 kHz: reference foreground
+  55.2/41.8/3.0%; old demo 75.9/21.5/2.6%; trial brightness .85 48.6/45.2/6.2%;
+  final brightness .65 55.2/41.2/3.6%. Kept .65 to avoid the trial's excess treble.
+  Different vowels and residual instruments confound these broad bands; they do not establish
+  an identity match. No EQ, reference samples, or downloaded audio enters the engine or git.

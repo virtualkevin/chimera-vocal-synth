@@ -104,6 +104,28 @@ test("Miku is the startup voice and restoring it sends the body before its custo
 });
 
 describe("Sing mode, live keys", () => {
+  test("Miku's demo uses the higher register while live MIDI keeps concert pitch", async () => {
+    voice = new WasmVoice(FS);
+    voice.setBody(MIKU_BODY);
+    voice.setSource({ ...MIKU_SOURCE });
+    await playDemo("Made of air", MIKU_BODY);
+    // First note was E4 (64); the Miku arrangement must begin on B4 (71).
+    const pitches = gesturesOf().flatMap((g) => g.targets.f0 === undefined ? [] : [g.targets.f0]);
+    expect(pitches.some((f) => Math.abs(cents(f, 71)) < 1)).toBe(true);
+    expect(Math.min(...pitches)).toBeGreaterThan(320); // the former A3 (220 Hz) is now E4
+    const demo = run(0.8);
+    expect(Math.abs(cents(median(demo.late(demo.f0)), 71))).toBeLessThan(35);
+    expect(Math.max(...demo.rms)).toBeGreaterThan(0.001);
+    stopSinging();
+    run(0.2);
+    useSing.getState().setLyrics("ah");
+    singNoteOn(69, 96, MIKU_BODY);
+    const live = run(0.6);
+    expect(Math.abs(cents(median(live.late(live.f0)), 69))).toBeLessThan(30);
+    singNoteOff(69, MIKU_BODY);
+    stopSinging();
+  });
+
   test("each key sings the next syllable at its pitch; legato, melisma and release to silence", () => {
     voice = new WasmVoice(FS);
     useSing.getState().setVibrato(0);

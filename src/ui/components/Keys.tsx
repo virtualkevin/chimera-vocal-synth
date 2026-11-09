@@ -1,13 +1,10 @@
 import { useEffect, useRef } from "react";
 import { useStore } from "../store.ts";
 import { midiSupported } from "../midi.ts";
-import { nearestBody, type BodyMix } from "../body.ts";
+import { keyboardBase } from "../body.ts";
 
 /** Computer-keyboard layout: two rows like a piano (A W S E D F T G Y H U J K O L P ;). */
 const KEYMAP: Record<string, number> = { a: 0, w: 1, s: 2, e: 3, d: 4, f: 5, t: 6, g: 7, y: 8, h: 9, u: 10, j: 11, k: 12, o: 13, l: 14, p: 15, ";": 16 };
-const BASES: Record<string, number> = { male: 48, female: 57, child: 60 };
-/** the lowest key, from the nearest preset body (so the keys stay on whole octaves of C/A) */
-const BASE = (b: BodyMix) => BASES[nearestBody(b)];
 
 export function Keys() {
   const body = useStore((s) => s.body);
@@ -16,7 +13,7 @@ export function Keys() {
   const noteOff = useStore((s) => s.noteOff);
   const start = useStore((s) => s.start);
   const octave = useRef(0);
-  const base = BASE(body) + octave.current * 12;
+  const base = keyboardBase(body) + octave.current * 12;
 
   useEffect(() => {
     /** pressed key → the note it played (released as that note, whatever the body or octave now) */
@@ -31,7 +28,7 @@ export function Keys() {
       if (k === "z") octave.current = Math.max(-2, octave.current - 1);
       if (k === "x") octave.current = Math.min(2, octave.current + 1);
       if (!(k in KEYMAP) || down.has(k)) return;
-      const midi = BASE(useStore.getState().body) + octave.current * 12 + KEYMAP[k];
+      const midi = keyboardBase(useStore.getState().body) + octave.current * 12 + KEYMAP[k];
       down.set(k, midi);
       void start();
       noteOn(midi);

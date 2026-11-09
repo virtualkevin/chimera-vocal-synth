@@ -1,8 +1,33 @@
 import { expect, test } from "bun:test";
-import { WasmVoice } from "./harness.ts";
+import { initEngine, WasmVoice } from "./harness.ts";
 import { MIKU_BODY, MIKU_SOURCE } from "../src/ui/voicePresets.ts";
+import { keyboardBase, PRESETS } from "../src/ui/body.ts";
 
-test("Miku renders a voiced C4 on its smaller tract, follows notes, and releases to silence", () => {
+await initEngine();
+const { VoiceModel } = await import("../src/ui/analysis.ts");
+const { NEUTRAL } = await import("../src/wasm/engine.ts");
+
+test("Miku raises the tract resonances as well as the source pitch", () => {
+  const previous = new VoiceModel({ female: 1, child: 0.15 }, 48000);
+  const current = new VoiceModel(MIKU_BODY, 48000);
+  try {
+    expect(current.frame(NEUTRAL).length).toBeLessThan(previous.frame(NEUTRAL).length * 0.95);
+    const before = previous.transfer(NEUTRAL).formants, after = current.transfer(NEUTRAL).formants;
+    expect(after[1] / before[1]).toBeGreaterThan(1.04);
+    expect(after[2] / before[2]).toBeGreaterThan(1.04);
+  } finally {
+    previous.dispose();
+    current.dispose();
+  }
+});
+
+test("Miku's keyboard starts at C4 without transposing the other bodies", () => {
+  expect(keyboardBase(MIKU_BODY)).toBe(60);
+  expect(keyboardBase(PRESETS.female)).toBe(57);
+  expect(keyboardBase(PRESETS.male)).toBe(48);
+});
+
+test("Miku renders a voiced G4 on its smaller tract, follows notes, and releases to silence", () => {
   const voice = new WasmVoice();
   const maleAreas = voice.state().orAreas;
   voice.setBody(MIKU_BODY);
@@ -20,7 +45,7 @@ test("Miku renders a voiced C4 on its smaller tract, follows notes, and releases
 
   // Measure the waveform's period too: telemetry alone cannot catch an octave error in audio.
   let bestLag = 0, best = -Infinity;
-  for (let lag = 140; lag <= 480; lag++) {
+  for (let lag = 80; lag <= 480; lag++) {
     let xy = 0, xx = 0, yy = 0;
     for (let i = 0; i < tail.length - lag; i++) {
       xy += tail[i] * tail[i + lag];

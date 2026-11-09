@@ -36,13 +36,19 @@ async function run(viewport: { width: number; height: number }, tag: string) {
     // @ts-expect-error debug handle
     return window.__chimeraEngine?.latest?.t?.f0 ?? 0;
   });
-  if (Math.abs(await pitch() - 261.625565) > 5) errors.push(`[${tag}] startup did not apply Miku's C4 pitch`);
+  if (Math.abs(await pitch() - 391.995436) > 5) errors.push(`[${tag}] startup did not apply Miku's G4 pitch`);
   await page.getByRole("radio", { name: "Male", exact: true }).click();
   await page.waitForTimeout(500);
   if (Math.abs(await pitch() - 110) > 5) errors.push(`[${tag}] male body did not restore its pitch`);
   await miku.click();
   await page.waitForTimeout(500);
-  if (Math.abs(await pitch() - 261.625565) > 5) errors.push(`[${tag}] Miku selector did not restore its C4 pitch`);
+  if (Math.abs(await pitch() - 391.995436) > 5) errors.push(`[${tag}] Miku selector did not restore its G4 pitch`);
+  await page.keyboard.down("a");
+  await page.waitForTimeout(350);
+  if (Math.abs(await pitch() - 261.625565) > 5) errors.push(`[${tag}] Miku keyboard fell back to the low adult-female register`);
+  await page.keyboard.up("a");
+  await miku.click();
+  await page.waitForTimeout(350);
   await page.screenshot({ path: `${outDir}/${tag}-1-running.png` });
   // The Miku wireframe opens in 3D; articulator dragging belongs to the flat view.
   await page.getByRole("checkbox", { name: "3D", exact: true }).uncheck();

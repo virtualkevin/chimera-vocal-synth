@@ -17,7 +17,8 @@ for tests and the `chimera` CLI.
 - **Duet** (`?show=<id>`): two 3D heads replay a pre-rendered song.
 
 The default **Miku** preset is a bright, steady, Miku-inspired physical voice: a smaller female
-tract, C4 starting pitch, reduced breathiness and gentle singing vibrato. It is an approximation,
+tract, G4 starting pitch, reduced breathiness and gentle singing vibrato. Its keyboard begins
+at C4 and its demo melodies sit a fifth higher; external MIDI keeps concert pitch. It is an approximation,
 not the original Vocaloid voicebank. Select **Miku** to restore its body, source and vibrato settings.
 The 3D wireframe opens with teal twin tails, pointed bangs, pink hair clips and a headset;
 the animated vocal tract remains visible inside. Untick **3D** to drag the articulators in 2D.

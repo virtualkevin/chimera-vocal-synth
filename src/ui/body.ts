@@ -4,6 +4,7 @@
  */
 import type { BodyMix } from "../wasm/types.ts";
 import type { BodyName } from "../worklet/protocol.ts";
+import { MIKU_BODY } from "./voicePresets.ts";
 
 export type { BodyMix };
 
@@ -42,6 +43,9 @@ export function sameBody(a: BodyMix | null | undefined, b: BodyMix | null | unde
 }
 
 export const bodyKey = (b: BodyMix) => `${b.female},${b.child}`;
+
+/** Miku's computer/on-screen keyboard begins at C4, rather than the female body's A3. */
+export const keyboardBase = (b: BodyMix) => sameBody(b, MIKU_BODY) ? 60 : { male: 48, female: 57, child: 60 }[nearestBody(b)];
 
 /** A per-preset quantity blended by the body's weights (geometrically: pitches, frequencies). */
 export function blendLog(b: BodyMix, of: Record<BodyName, number>): number {
