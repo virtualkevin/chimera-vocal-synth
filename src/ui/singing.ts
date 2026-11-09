@@ -73,6 +73,8 @@ export function ensureDictionary(): void {
     .load()
     .then(() => {
       const s = useSing.getState();
+      // Explicit note/phoneme alignment must survive a late dictionary download.
+      if (demoRun) return;
       const syllables = lyricsToSyllables(s.lyrics);
       useSing.setState({ syllables, cursor: Math.min(s.cursor, Math.max(0, syllables.length - 1)) });
     })
@@ -251,6 +253,10 @@ export async function playLocalSong(song: LocalSong, body: BodyMix, ready?: () =
   if (token !== demoToken) return;
   const gestures: Gesture[] = [];
   const segments: ReturnType<typeof planSong>["segments"] = [];
+  const syllables: Syllable[] = song.vocals ? song.vocals.syllables.map((s) => ({
+    text: s.text, onset: s.onset.map((ipa) => ({ ipa })), nucleus: { ipa: s.vowel, stress: 1 },
+    coda: s.coda.map((ipa) => ({ ipa })), wordEnd: s.wordEnd, phraseEnd: s.phraseEnd ?? false,
+  })) : [AH];
   const t0 = 0.35;
   let end = t0;
   // Plan continuous runs together; split at real rests so the engine releases the breath.
@@ -258,7 +264,7 @@ export async function playLocalSong(song: LocalSong, body: BodyMix, ready?: () =
     let j = i + 1;
     while (j < song.notes.length && song.notes[j][1] - (song.notes[j - 1][1] + song.notes[j - 1][2]) < 0.035) j++;
     const notes = song.notes.slice(i, j).map(([midi, start, duration], k) => ({
-      midi, beats: i + k + 1 < j ? song.notes[i + k + 1][1] - start : duration, syl: AH,
+      midi, beats: i + k + 1 < j ? song.notes[i + k + 1][1] - start : duration, syl: song.vocals ? syllables[i + k] : AH,
     }));
     const plan = planSong(notes, { body, bpm: 60, t0: t0 + song.notes[i][1], vibrato: useSing.getState().vibrato });
     gestures.push(...plan.gestures);
@@ -269,10 +275,11 @@ export async function playLocalSong(song: LocalSong, body: BodyMix, ready?: () =
   const id = engine.schedule({ gestures, segments, end });
   demoRun = {
     id, times: song.notes.map(([, start, duration]) => [t0 + start, t0 + start + duration]),
-    midi: song.notes.map(([midi]) => midi), text: song.notes.map(() => "ah"),
-    shown: song.notes.map(() => "ah"), parent: song.notes.map((_, i) => i), end, offset: null, vowelOnly: true,
+    midi: song.notes.map(([midi]) => midi), text: song.notes.map((_, i) => song.vocals ? syllables[i].text : "ah"),
+    shown: song.notes.map((_, i) => song.vocals ? written(syllables[i]) : "ah"),
+    parent: song.notes.map((_, i) => i), end, offset: null, vowelOnly: !song.vocals,
   };
-  useSing.setState({ lyrics: "ah", syllables: [AH], cursor: 0, demo: `local:${song.id}`, demoAt: -1 });
+  useSing.setState({ lyrics: song.vocals?.lyrics ?? "ah", syllables, cursor: 0, demo: `local:${song.id}`, demoAt: -1 });
 }
 
 /** Sing a demo song (after `ready`, e.g. audio startup, resolves; unless stopped meanwhile). */

@@ -50,7 +50,7 @@ function Lyrics() {
         value={lyrics}
         onChange={(e) => setLyrics(e.target.value)}
         onKeyDown={(e) => e.stopPropagation()}
-        rows={1}
+        rows={Math.min(4, lyrics.split("\n").length)}
         aria-label="Lyrics to sing"
         placeholder="Type the words to sing"
         title="Each note sings the next syllable. Hold a key while you press the next one to sing legato. A lone “-” between words holds a vowel over several notes; hyphens split a word your way (“ti-ger”)."

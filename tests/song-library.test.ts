@@ -26,3 +26,12 @@ test("missing local library tolerates both a 404 and the SPA fallback", async ()
     await expect(loadSongLibrary()).rejects.toThrow("Could not load");
   } finally { globalThis.fetch = original; }
 });
+
+test("aligned lyrics require a validated syllable for every note", () => {
+  const syllable = { text: "See", onset: ["s"], vowel: "i", coda: [], wordEnd: true };
+  const vocals = { lyrics: "See me", syllables: [syllable, { ...syllable, text: "me", onset: ["m"] }] };
+  expect(parseSongLibrary([{ ...song, vocals }])[0].vocals).toEqual(vocals);
+  for (const bad of [null, { ...vocals, lyrics: "" }, { ...vocals, syllables: [syllable] }, { ...vocals, syllables: [syllable, { ...syllable, vowel: "" }] }, { ...vocals, syllables: [syllable, { ...syllable, onset: "m" }] }]) {
+    expect(() => parseSongLibrary([{ ...song, vocals: bad }])).toThrow();
+  }
+});

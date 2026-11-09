@@ -22,6 +22,10 @@ async function run(viewport: { width: number; height: number }, tag: string) {
   await page.route("**/shows/miku-songs/index.json", (route) => route.fulfill({ json: [{
     id: "test", title: "Original test melody", artist: "Test", credit: "Test",
     source: "https://example.com", excerpt: "Synthetic test", notes: [[69, 0, .5], [72, 1.3, .5]],
+    vocals: { lyrics: "See me", syllables: [
+      { text: "See", onset: ["s"], vowel: "i", coda: [], wordEnd: true },
+      { text: "me", onset: ["m"], vowel: "i", coda: [], wordEnd: true },
+    ] },
   }] }));
   page.on("console", (m) => {
     const t = `${m.type()}: ${m.text()}`;
@@ -146,10 +150,12 @@ async function run(viewport: { width: number; height: number }, tag: string) {
   await page.waitForTimeout(300);
   if (await rms() > .001) errors.push(`[${tag}] typing in the song selector played a piano key`);
   await page.keyboard.up("a");
-  await page.getByRole("button", { name: "Play melody", exact: true }).click();
+  await page.getByRole("button", { name: "Sing lyrics", exact: true }).click();
   await page.waitForTimeout(600);
   if (await rms() < .001) errors.push(`[${tag}] local melody made no sound`);
-  await page.getByRole("button", { name: "Stop melody", exact: true }).click();
+  if (await page.getByLabel("Lyrics to sing").inputValue() !== "See me") errors.push(`[${tag}] local lyrics were replaced by a vowel`);
+  if (await page.locator(".syl.now").textContent() !== "See") errors.push(`[${tag}] local lyric cursor did not follow the note`);
+  await page.getByRole("button", { name: "Stop song", exact: true }).click();
   await page.waitForTimeout(700);
   if (await rms() > .001) errors.push(`[${tag}] local melody did not stop`);
   // bestiary: every creature, its first call, a key in held-voice mode, and the sustain toggle

@@ -16,10 +16,11 @@ const midiToHz = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 
 const FS = 48000;
 let voice = new WasmVoice(FS);
+const plannedListeners: ((m: { id: number; t0: number }) => void)[] = [];
 const fakeEngine = {
   latest: null,
   voiceClock: () => voice.clock,
-  onPlanned: () => () => {},
+  onPlanned: (fn: (m: { id: number; t0: number }) => void) => { plannedListeners.push(fn); return () => {}; },
   scheduleGestures: (gs: Gesture[], lead = 0.006) => {
     voice.schedule(gs, lead);
   },
@@ -40,7 +41,7 @@ const engineStub = new Proxy(
   { get: (t, k) => (k in t ? t[k as string] : () => {}), set: (t, k, v) => ((t[k as string] = v), true) },
 );
 mock.module("../src/audio/AudioEngine.ts", () => ({ engine: engineStub }));
-const { useSing, singNoteOn, singNoteOff, playDemo, playLocalSong, stopSinging } = await import("../src/ui/singing.ts");
+const { useSing, singNoteOn, singNoteOff, playDemo, playLocalSong, stopSinging, tickSinging, sungNow, ensureDictionary } = await import("../src/ui/singing.ts");
 const gesturesOf = () => voice.score();
 /** breath the score is giving now (strength-weighted activation of breath gestures) */
 const breathNow = () => {
@@ -104,6 +105,46 @@ test("Miku is the startup voice and restoring it sends the body before its custo
 });
 
 describe("Sing mode, live keys", () => {
+  test("aligned local lyrics drive consonants, mouth words and syllable cursor, even if the dictionary loads late", async () => {
+    const { g2p } = await import("../src/ui/speech.ts");
+    const originalLoad = g2p.load;
+    let loaded!: () => void;
+    g2p.load = () => new Promise<void>((r) => { loaded = r; });
+    try {
+      ensureDictionary();
+      voice = new WasmVoice(FS);
+      voice.setBody(MIKU_BODY);
+      voice.setSource({ ...MIKU_SOURCE });
+      const song = {
+        id: "lyrics-test", title: "Test", artist: "Test", credit: "Test", source: "https://example.com", excerpt: "Test",
+        notes: [[69, 0, .5], [72, .5, .5]] as [number, number, number][],
+        vocals: { lyrics: "See me", syllables: [
+          { text: "See", onset: ["s"], vowel: "i", coda: [], wordEnd: true },
+          { text: "me", onset: ["m"], vowel: "i", coda: [], wordEnd: true },
+        ] },
+      };
+      await playLocalSong(song, MIKU_BODY);
+      loaded();
+      await Promise.resolve();
+      expect(useSing.getState().lyrics).toBe("See me");
+      expect(useSing.getState().syllables.map((s) => s.nucleus.ipa)).toEqual(["i", "i"]);
+      expect(useSing.getState().syllables[1].onset).toEqual([{ ipa: "m" }]);
+      for (const fn of plannedListeners) fn({ id: 1, t0: .03 });
+      run(.6);
+      tickSinging();
+      expect(sungNow()?.text).toBe("See");
+      expect(useSing.getState().demoAt).toBe(0);
+      // The planned /m/ actually closes the lips before the second vowel.
+      const transition = run(.4);
+      expect(Math.min(...transition.minOral)).toBeLessThan(.05);
+      tickSinging();
+      expect(sungNow()?.text).toBe("me");
+      expect(useSing.getState().demoAt).toBe(1);
+      expect(Math.max(...transition.rms)).toBeGreaterThan(.001);
+      stopSinging();
+    } finally { g2p.load = originalLoad; }
+  });
+
   test("local MIDI preserves concert pitch, a real rest, and cancellation during audio startup", async () => {
     const song = { id: "test", title: "Test", artist: "Test", credit: "Test", source: "https://example.com", excerpt: "Test", notes: [[69, 0, .5], [72, 1.3, .5]] as [number, number, number][] };
     voice = new WasmVoice(FS);

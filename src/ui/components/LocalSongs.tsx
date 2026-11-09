@@ -14,7 +14,7 @@ export function LocalSongs() {
     loadSongLibrary(abort.signal).then((items) => {
       if (abort.signal.aborted) return;
       setSongs(items);
-      setSelected(items[0]?.id ?? "");
+      setSelected(items.find((s) => s.vocals)?.id ?? items[0]?.id ?? "");
     }).catch((e: unknown) => { if (!abort.signal.aborted) setError(e instanceof Error ? e.message : "Could not load local songs."); });
     return () => abort.abort();
   }, []);
@@ -35,9 +35,9 @@ export function LocalSongs() {
             const { body, start } = useStore.getState();
             await playLocalSong(song, body, start);
           } catch (e) { setError(e instanceof Error ? e.message : "Could not play this melody."); }
-        }}>{playing ? "Stop melody" : "Play melody"}</Chip>
+        }}>{playing ? (song.vocals ? "Stop song" : "Stop melody") : (song.vocals ? "Sing lyrics" : "Play melody")}</Chip>
       </div>
-      <p>{song.artist} · {song.excerpt} · sung on “ah”</p>
+      <p>{song.artist} · {song.excerpt} · {song.vocals ? "with lyrics" : "sung on “ah”"}</p>
       <p><a href={song.source} target="_blank" rel="noreferrer">MIDI arrangement: {song.credit}</a></p>
     </>}
     {error && <p role="alert">{error}</p>}

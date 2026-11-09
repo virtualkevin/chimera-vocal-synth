@@ -13,7 +13,8 @@ for tests and the `chimera` CLI.
   gestures and prosody, with the gestural score and a consonant chart on screen.
 - **Sing**: piano roll with lyrics per note; consonants land before the beat.
   Local MIDI excerpts appear in the **Miku songs** selector when installed (see
-  [local song setup](docs/local-songs.md)); **Play melody** sings the notes on an “ah” vowel.
+  [local song setup](docs/local-songs.md)); **Sing lyrics** uses aligned words when provided,
+  while **Play melody** sings unannotated notes on an “ah” vowel.
 - **Beatbox**: pads and a step sequencer, every drum an articulatory gesture.
 - **Bestiary**: songbird (two-voice syrinx), seal, alligator and elephant.
 - **Duet** (`?show=<id>`): two 3D heads replay a pre-rendered song.
