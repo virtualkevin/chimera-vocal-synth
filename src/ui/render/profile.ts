@@ -97,18 +97,26 @@ export function bodyPoint(model: VoiceModel): (x: number, y: number) => Vec {
   return (x: number, y: number): Vec => ({ x: x * k, y: (y < 7 ? 7 - (7 - y) * ph : y) * k });
 }
 
-export function buildProfile(model: VoiceModel, f: HumanFrame, a: HumanArtic): Profile {
+/** `miku` styles the visible head only; the engine's articulators and airway stay in body cm. */
+export function buildProfile(model: VoiceModel, f: HumanFrame, a: HumanArtic, miku = false): Profile {
   const t = model.tract;
   const P = (x: number, y: number) => t.P(x, y);
   const J = jawFn(model, a);
   const k = t.scale;
   const lar = a.larynx * k;
   const B = bodyPoint(model);
+  const N = (x: number, y: number) => B(miku && x > 6.4 ? 6.4 + (x - 6.4) * 0.5 : x, y);
   const ulOut = f.upperLip.slice(7); // edge → nose
   const llOut = f.lowerLip.slice(7); // edge → chin
-  const neckFront = catmullRom([B(2.3, -4.6), B(2.38, -1.5), B(2.52, 0.4), B(3.0, 1.7), J(5.3, 3.0), J(7.25, 3.35), J(7.95, 4.6), J(7.55, 5.7)], 4);
-  const face = catmullRom([ulOut[ulOut.length - 1], B(7.05, 10.6), B(7.75, 10.78), B(8.75, 11.05), B(9.25, 11.65), B(8.95, 12.6), B(8.35, 13.9), B(7.7, 15.0), B(7.95, 16.1), B(7.9, 18.1), B(6.9, 20.5)], 4);
-  const cranium = catmullRom([B(6.9, 20.5), B(3.0, 22.9), B(-2.2, 22.7), B(-6.9, 19.6), B(-8.7, 15.4), B(-8.3, 11.9), B(-7.4, 8.9), B(-6.8, 4.8), B(-6.6, 0), B(-6.6, -4.6)], 4);
+  const neckFront = catmullRom(miku
+    ? [B(1.9, -4.6), B(1.95, 0), B(2.4, 2.5), J(5.1, 4.5), J(6.8, 4.9), J(7.35, 5.7), J(7.3, 6.4)]
+    : [B(2.3, -4.6), B(2.38, -1.5), B(2.52, 0.4), B(3.0, 1.7), J(5.3, 3.0), J(7.25, 3.35), J(7.95, 4.6), J(7.55, 5.7)], 4);
+  const face = catmullRom(miku
+    ? [ulOut[ulOut.length - 1], B(6.9, 10.6), B(7.5, 11.0), B(7.85, 11.5), B(7.45, 12.2), B(7.15, 13.7), B(7.3, 15.0), B(7.85, 17.5), B(7.7, 19.0), B(6.9, 20.5)]
+    : [ulOut[ulOut.length - 1], B(7.05, 10.6), B(7.75, 10.78), B(8.75, 11.05), B(9.25, 11.65), B(8.95, 12.6), B(8.35, 13.9), B(7.7, 15.0), B(7.95, 16.1), B(7.9, 18.1), B(6.9, 20.5)], 4);
+  const cranium = catmullRom(miku
+    ? [B(6.9, 20.5), B(3.0, 22.9), B(-2.2, 22.7), B(-6.9, 19.6), B(-8.7, 15.4), B(-8.1, 12), B(-6.1, 8.5), B(-3.9, 4.5), B(-3.8, 0), B(-3.8, -4.6)]
+    : [B(6.9, 20.5), B(3.0, 22.9), B(-2.2, 22.7), B(-6.9, 19.6), B(-8.7, 15.4), B(-8.3, 11.9), B(-7.4, 8.9), B(-6.8, 4.8), B(-6.6, 0), B(-6.6, -4.6)], 4);
   const vertebrae: Vec[][] = [];
   for (let i = 0; i < 9; i++) {
     const y0 = -4.4 + i * 1.75;
@@ -156,7 +164,7 @@ export function buildProfile(model: VoiceModel, f: HumanFrame, a: HumanArtic): P
     eyeC: B(6.5, 15.4),
     vertebrae,
     cords: [[P(-5.3, -4.6), P(-4.5, -4.6), P(-4.5, 11.8), P(-5.1, 12.4), P(-5.6, 11.6)], [P(-5.1, -4.6), P(-4.7, -4.6), P(-4.72, 11.4), P(-5.15, 11.6)]],
-    nasal: catmullRom([B(0.3, 11.2), B(1.1, 10.25), B(2.7, 10.75), B(4.6, 10.85), B(6.4, 10.65), B(7.6, 10.85), B(8.45, 11.3), B(8.0, 12.2), B(6.7, 13.4), B(4.4, 13.9), B(1.8, 13.6), B(0.2, 12.6)], 4),
+    nasal: catmullRom([N(0.3, 11.2), N(1.1, 10.25), N(2.7, 10.75), N(4.6, 10.85), N(6.4, 10.65), N(7.6, 10.85), N(8.45, 11.3), N(8.0, 12.2), N(6.7, 13.4), N(4.4, 13.9), N(1.8, 13.6), N(0.2, 12.6)], 4),
     turbinates: ([[3.0, 11.45, 2.1, 0.32], [3.5, 12.45, 1.9, 0.3], [4.0, 13.3, 1.45, 0.22]] as const).map(([cx, cy, rx, ry]) => ellipse(B(cx, cy), rx * k, ry * k, -0.04)),
     palOral,
     palNasal: palOral.map((p) => ({ x: p.x, y: p.y + 0.55 * k })),

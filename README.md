@@ -22,6 +22,8 @@ at C4 and its demo melodies sit a fifth higher; external MIDI keeps concert pitc
 not the original Vocaloid voicebank. Select **Miku** to restore its body, source and vibrato settings.
 The 3D wireframe opens with teal twin tails, pointed bangs, pink hair clips and a headset;
 the animated vocal tract remains visible inside. Untick **3D** to drag the articulators in 2D.
+The Miku head has a tapered jaw, small nose, slim neck and enlarged animated eye sockets;
+these are visual proportions and do not alter the calibrated voice.
 Male, female and child bodies still blend continuously. Everything on screen animates from live
 engine state: pressure in the airway, airflow, the vocal folds, spectra and formants.
 

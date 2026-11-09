@@ -55,6 +55,8 @@ function interp(tab: Table, x: number): number {
 
 /** half-width of the head and neck */
 const WIDTH: Table = [[-4.6, 5.3], [0, 5.4], [2.5, 5.5], [4.5, 5.25], [6.5, 5.5], [8.5, 6.1], [10.5, 6.6], [12.5, 7.0], [15, 7.3], [17.5, 7.65], [19.5, 7.4], [21, 6.5], [22.2, 4.6], [23.0, 1.0]];
+/** A slim neck and tapered chin beneath high, rounded cheeks; the crown still fits the hair. */
+const MIKU_WIDTH: Table = [[-4.6, 3.0], [0, 3.1], [2.5, 3.0], [4.5, 2.5], [5.5, 2.9], [7, 4.0], [9, 5.6], [11.5, 6.8], [14, 7.3], [17.5, 7.65], [19.5, 7.4], [21, 6.5], [22.2, 4.6], [23, 1]];
 /** the face's surface beside the midline features (chin, lips, nose), as body x */
 const PLANE: Table = [[3.4, 5.9], [4.6, 6.2], [5.7, 6.15], [6.5, 6.2], [8.0, 6.35], [9.5, 6.35], [10.6, 6.55], [11.6, 6.75], [12.6, 6.9], [13.9, 7.15], [15.0, 7.45], [16.1, 7.95]];
 /** half-width of the midline feature: the chin, then the nose */
@@ -311,6 +313,7 @@ const cumulative = (p: Vec[]): number[] => {
 // ------------------------------------------------------------------ the rest pose
 
 function buildRest(model: VoiceModel): Rest {
+  const miku = sameBody(model.body, MIKU_BODY);
   const t = model.tract;
   const k = t.scale;
   const ph = model.bodyParams.pharynx;
@@ -321,20 +324,23 @@ function buildRest(model: VoiceModel): Rest {
   // jaw closed, lips together
   const artic: HumanArtic = { ...NEUTRAL, jaw: 0, lipAp: 0, labiodental: 0 };
   const frame = model.frame(artic);
-  const prof = buildProfile(model, frame, artic);
+  const prof = buildProfile(model, frame, artic, miku);
   const skin = [...prof.skinLower, ...prof.skinUpper];
   const head = new Shape(skin, 0.08 * k, (y, F, Bk) => {
     const Y = unBy(y);
     const plane = Y >= 3.4 && Y <= 16.1 ? interp(PLANE, Y) * k : Infinity;
     const Fs = Math.min(F, plane);
     const pf = 2.2 + 0.4 * smooth(2.5, 3.5, Y) * (1 - smooth(17, 18.5, Y));
-    return { F, Bk, Fs, W: interp(WIDTH, Y) * k, xw: Bk + (Fs - Bk) * interp(WIDEST, Y), E: F - Fs, wf: interp(FEATURE, Y) * k, pf };
+    return { F, Bk, Fs, W: interp(miku ? MIKU_WIDTH : WIDTH, Y) * k, xw: Bk + (Fs - Bk) * interp(WIDEST, Y), E: F - Fs, wf: interp(FEATURE, Y) * k * (miku && Y > 10.6 && Y < 15 ? 0.55 : 1), pf };
   });
   const condyle = P(-2.5, 10.5);
   const lipTop = frame.upperLip[frame.upperLip.length - 1].y;
   const lipBottom = frame.lowerLip[frame.lowerLip.length - 1].y;
   const lipHalf = LIP_HALF * k;
   const inLips = (x: number, y: number, z: number, s: Section) => y > lipBottom && y < lipTop && Math.abs(z) < lipHalf && x > s.xw;
+  // Leave real openings in the face mesh for the enlarged orbital rims and animated eyes.
+  const inEyes = (x: number, y: number, z: number, s: Section) => miku && x > s.xw &&
+    ((Math.abs(z) / k - 3.25) / 2.25) ** 2 + ((unBy(y) - 14.4) / 1.9) ** 2 < 1;
 
   // ---- the head's shell: rings by height, verticals over the face, meridians round the back
   const shell: Skinned[] = [];
@@ -360,7 +366,7 @@ function buildRest(model: VoiceModel): Rest {
     // right side from the back to the front, then the left side back again (no doubled ends)
     for (let i = 0; i < n; i++) pts.push(half[2 * i], y, half[2 * i + 1]);
     for (let i = n - 2; i > 0; i--) pts.push(half[2 * i], y, -half[2 * i + 1]);
-    for (let i = 0; i < pts.length / 3; i++) keep.push(!inLips(pts[3 * i], y, pts[3 * i + 2], s));
+    for (let i = 0; i < pts.length / 3; i++) keep.push(!inLips(pts[3 * i], y, pts[3 * i + 2], s) && !inEyes(pts[3 * i], y, pts[3 * i + 2], s));
     addShell(pts, keep, true);
   }
   const vstep = 0.3 * k;
@@ -376,7 +382,7 @@ function buildRest(model: VoiceModel): Rest {
       }
       const x = frontX(s, z);
       pts.push(x, y, z);
-      keep.push(!inLips(x, y, z, s));
+      keep.push(!inLips(x, y, z, s) && !inEyes(x, y, z, s));
     }
     addShell(pts, keep, false);
   }
@@ -394,7 +400,6 @@ function buildRest(model: VoiceModel): Rest {
   }
 
   const fixed: Group[] = [];
-  const miku = sameBody(model.body, MIKU_BODY);
   const jaw: Group[] = [];
   const group = (into: Group[], color: string, width: number, alpha: number, fill: (L: Lines) => void, hot = false) => {
     const L = new Lines();
@@ -506,23 +511,25 @@ function buildRest(model: VoiceModel): Rest {
       for (let Y = 14.6; Y >= 11.3; Y -= 0.15) {
         const y = By(Y), s = head.at(y);
         if (!s) continue;
-        const z = side * (0.3 + (1.05 * (14.6 - Y)) / 3.3) * k;
+        const z = side * (0.3 + (1.05 * (14.6 - Y)) / 3.3) * k * (miku ? 0.5 : 1);
         L.p(frontX(s, z), y, z);
       }
       L.end();
-      const wing: [number, number, number][] = [[7.95, 11.05, 0.95], [7.4, 11.15, 1.45], [7.25, 11.6, 1.55], [7.55, 12.1, 1.35], [8.2, 12.15, 1.0]];
+      const wing: [number, number, number][] = miku
+        ? [[7.35, 10.95, 0.35], [7.05, 11.1, 0.65], [7.15, 11.55, 0.7], [7.6, 11.65, 0.35]]
+        : [[7.95, 11.05, 0.95], [7.4, 11.15, 1.45], [7.25, 11.6, 1.55], [7.55, 12.1, 1.35], [8.2, 12.15, 1.0]];
       for (const [x, Y, z] of wing) L.p(x * k, By(Y), side * z * k);
       L.end();
     }
   });
   // ---- nostrils, under the tip of the nose
   group(fixed, V.blueMid, 1.0, 0.9, (L) => {
-    for (const side of [1, -1]) L.ellipse([8.05 * k, By(10.98), side * 0.62 * k], [0.42 * k, 0.04 * k, 0], [0, 0, 0.26 * k], 16);
+    for (const side of [1, -1]) L.ellipse([(miku ? 7.4 : 8.05) * k, By(10.98), side * (miku ? 0.35 : 0.62) * k], [(miku ? 0.22 : 0.42) * k, 0.04 * k, 0], [0, 0, (miku ? 0.13 : 0.26) * k], 16);
   });
 
   // ---- brain: rings and meridians over the 2D outline, the skull and its base stay on the midline
   const brain = new Shape(prof.brain, 0.08 * k, (y, F, Bk) => ({ F, Bk, Fs: F, W: interp(BRAIN_WIDTH, unBy(y)) * k, xw: Bk + (F - Bk) * 0.48, E: 0, wf: 1, pf: 2.3 }));
-  group(fixed, V.blueMid, 0.85, 0.32, (L) => {
+  group(fixed, V.blueMid, 0.85, miku ? 0.16 : 0.32, (L) => {
     for (let y = brain.y0 + 0.6 * k; y < brain.y1 - 0.15 * k; y += 1.5 * k) {
       const s = brain.at(y);
       if (!s) continue;
@@ -550,6 +557,7 @@ function buildRest(model: VoiceModel): Rest {
   });
 
   // ---- cervical vertebrae: bodies, arches, processes; the spinal cord through them
+  const spineStart = fixed.length;
   group(fixed, V.blueDim, 0.9, 0.6, (L) => {
     for (let i = 0; i < 9; i++) {
       const y0 = -4.4 + i * 1.75;
@@ -575,6 +583,11 @@ function buildRest(model: VoiceModel): Rest {
   });
 
   // ---- nasal cavity: the septum is the 2D outline; its side walls and the turbinates beside it
+  if (miku) {
+    // Fit the decorative vertebrae inside the slender neck, behind the unchanged pharynx.
+    for (const g of fixed.slice(spineStart)) for (const l of g.lines)
+      for (let i = 0; i < l.length; i += 3) l[i] = k * (-1.3 + (l[i] / k + 1.3) * 0.38);
+  }
   group(fixed, V.blueDim, 0.9, 0.7, (L) => {
     for (const s of [1, -1]) {
       for (const p of prof.nasal) L.p(p.x, p.y, s * 1.2 * k);
@@ -646,6 +659,10 @@ function buildRest(model: VoiceModel): Rest {
 
   // ---- the mandible (rest pose; the jaw turns it about the condyles)
   const M = (x: number, y: number, z: number): V3 => {
+    if (miku) {
+      z *= 0.65 + 0.35 * smooth(4.5, 10.5, y);
+      y += 0.9 * (1 - smooth(4.5, 7.5, y));
+    }
     const p = P(x, y);
     return [p.x, p.y, z * k];
   };
@@ -688,9 +705,10 @@ function buildRest(model: VoiceModel): Rest {
   group(jaw, V.blue, 1.0, 0.8, (L) => teeth(L, loFront, loDepth, loHalf, LOWER_TEETH, (u) => (7.75 + 0.45 * Math.pow(u, 1.5)) * k, -1));
 
   // eyes: the 2D view draws one on the midline; here they sit either side of the nose
-  const eyeC = B(6.15, 15.35);
+  const eyeC = miku ? B(7.0, 14.4) : B(6.15, 15.35);
+  const eyeZ = (miku ? 3.25 : 3.15) * k;
   const center = new THREE.Vector3(0.3 * k, (head.y0 + head.y1) / 2, 0);
-  return { model, miku, head, condyle, lipHalf, center, shell, fixed, jaw, chin, eyes: [[eyeC.x, eyeC.y, 3.15 * k], [eyeC.x, eyeC.y, -3.15 * k]], eyeR: (miku ? 1.45 : 1.05) * k };
+  return { model, miku, head, condyle, lipHalf, center, shell, fixed, jaw, chin, eyes: [[eyeC.x, eyeC.y, eyeZ], [eyeC.x, eyeC.y, -eyeZ]], eyeR: (miku ? 1.75 : 1.05) * k };
 }
 
 // ------------------------------------------------------------------ the renderer
@@ -899,8 +917,8 @@ export class Anatomy3D {
     }
 
     // ---- the midsagittal section, as the 2D view draws it
-    const G = buildProfile(model, f, a);
-    line(G.inset, V.blueDim, 0.9, { alpha: 0.5 });
+    const G = buildProfile(model, f, a, rest.miku);
+    if (!rest.miku) line(G.inset, V.blueDim, 0.9, { alpha: 0.5 });
     line(G.skull, V.blueDim, 0.9, { close: true, alpha: 0.6 });
     line(G.brain, V.blueMid, 1.0, { close: true, alpha: 0.75 });
     line(G.sulcus, V.blueDim, 0.9);
@@ -993,6 +1011,10 @@ export class Anatomy3D {
   private eyes(rest: Rest, dt: number): void {
     const g = this.gaze, e = this.face;
     g.update(this.clock, dt);
+    if (rest.miku) {
+      this.mikuEyes(rest);
+      return;
+    }
     const r = rest.eyeR;
     // where they look: forward, turned by the gaze (yaw towards +z, pitch up)
     const pitch = g.pitch + 1.3 * e.lookUp;
@@ -1042,7 +1064,50 @@ export class Anatomy3D {
       }
       L.end();
       const style = [[V.blueMid, 1.0, 0.35], [V.blue, 1.0, 0.9 * seen], [V.blue, 1.0, 0.7 * seen], [V.blue, 1.25, 0.95], [V.blue, 1.05, 0.75], [V.blueMid, 1.3, 0.8]] as const;
-      L.lines.forEach((l, i) => this.beams.line(l, l.length / 3, rest.miku && (i === 1 || i === 2) ? "#42e8dc" : style[i][0], style[i][1], { alpha: style[i][2] }));
+      L.lines.forEach((l, i) => this.beams.line(l, l.length / 3, style[i][0], style[i][1], { alpha: style[i][2] }));
+    }
+  }
+
+  /** Large orbital rims and upright irises, with the same blink/gaze/expression as the human. */
+  private mikuEyes(rest: Rest): void {
+    const r = rest.eyeR, k = this.k, e = this.face, g = this.gaze;
+    const open = 1 - e.lid;
+    for (const c of rest.eyes) {
+      const side = Math.sign(c[2]);
+      const L = new Lines();
+      const p = (u: number, v: number): V3 => [c[0] + k * (0.25 - 0.75 * (u + 0.3) ** 2), c[1] + v * r, c[2] + side * u * r * 1.2];
+      // A bony socket surrounds the eye without drawing a small spherical eyeball inside it.
+      for (let i = 0; i <= 40; i++) {
+        const a = i * Math.PI / 20;
+        L.p(...p(1.08 * Math.cos(a), 0.98 * Math.sin(a) + 0.07));
+      }
+      L.end();
+      for (const upper of [true, false]) {
+        for (let i = 0; i <= 24; i++) {
+          const u = -1 + i / 12, arc = Math.pow(Math.max(0, 1 - u * u), 0.7);
+          const lower = -0.55 * arc + 0.1 * u;
+          const y = upper ? lower + (1.42 + 0.15 * Math.max(0, e.brow)) * arc * open : lower;
+          L.p(...p(u, y));
+        }
+        L.end();
+      }
+      // Swept outer lash and a fine brow; both follow the upper lid/expression.
+      L.p(...p(0.7, 0.7 * open)).p(...p(1.0, 0.1)).p(...p(1.18, 0.25)).end();
+      for (let i = 0; i <= 16; i++) {
+        const u = -0.85 + i * 1.7 / 16;
+        L.p(...p(u, 1.18 + 0.16 * (1 - u * u) + 0.18 * e.brow));
+      }
+      L.end();
+      const styles = [[V.blueMid, 1.05, 0.8], [V.blue, 1.6, 1], [V.blue, 1.05, 0.85], [V.blue, 1.6, 1], [V.blue, 1.05, 0.8]] as const;
+      L.lines.forEach((l, i) => this.beams.line(l, l.length / 3, styles[i][0], styles[i][1], { alpha: styles[i][2] }));
+      if (open > 0.15) {
+        const iris = new Lines();
+        const cy = c[1] + r * (-0.5 * (1 - open) + 0.12 * g.pitch + 0.15 * e.lookUp);
+        const center: V3 = [c[0] + 0.35 * k, cy, c[2] + 0.5 * r * g.yaw];
+        for (const size of [1, 0.45]) iris.ellipse(center, [0, 0.68 * r * open * size, 0], [0, 0, 0.42 * r * size], 32);
+        iris.ellipse([center[0] + 0.02 * k, cy + 0.25 * r * open, center[2] - 0.14 * r], [0, 0.12 * r * open, 0], [0, 0, 0.08 * r], 12);
+        iris.lines.forEach((l, i) => this.beams.line(l, l.length / 3, i === 2 ? V.white : "#42e8dc", i === 0 ? 1.6 : 1.05, { alpha: open, hot: i === 2 }));
+      }
     }
   }
 
