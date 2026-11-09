@@ -16,7 +16,12 @@ for tests and the `chimera` CLI.
 - **Bestiary**: songbird (two-voice syrinx), seal, alligator and elephant.
 - **Duet** (`?show=<id>`): two 3D heads replay a pre-rendered song.
 
-Male, female and child bodies blend continuously. Everything on screen animates from live
+The default **Miku** preset is a bright, steady, Miku-inspired physical voice: a smaller female
+tract, C4 starting pitch, reduced breathiness and gentle singing vibrato. It is an approximation,
+not the original Vocaloid voicebank. Select **Miku** to restore its body, source and vibrato settings.
+The 3D wireframe opens with teal twin tails, pointed bangs, pink hair clips and a headset;
+the animated vocal tract remains visible inside. Untick **3D** to drag the articulators in 2D.
+Male, female and child bodies still blend continuously. Everything on screen animates from live
 engine state: pressure in the airway, airflow, the vocal folds, spectra and formants.
 
 ## Run it

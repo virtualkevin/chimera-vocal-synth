@@ -1,12 +1,13 @@
 import { create } from "zustand";
 import { engine } from "../audio/AudioEngine.ts";
-import { DEFAULT_SOURCE, type VoiceSource } from "../wasm/engine.ts";
+import type { VoiceSource } from "../wasm/engine.ts";
 import { NEUTRAL, restTip, type HumanArtic } from "../wasm/engine.ts";
 import { defaultF0, PRESETS, sameBody, type BodyMix } from "./body.ts";
 import { creatureById } from "../wasm/engine.ts";
 import type { ParamDef } from "../wasm/types.ts";
 import { BEAT_PRESETS, BASS_NOTE, beatReady, parseBeat, type BeatStep } from "../wasm/engine.ts";
-import { singNoteOn, singNoteOff, stopSinging, ensureDictionary } from "./singing.ts";
+import { singNoteOn, singNoteOff, stopSinging, ensureDictionary, useSing } from "./singing.ts";
+import { MIKU_BODY, MIKU_SOURCE, MIKU_VIBRATO } from "./voicePresets.ts";
 import { stopSpeaking } from "./speech.ts";
 import { connectMidi, disconnectMidi, type MidiStatus } from "./midi.ts";
 
@@ -71,6 +72,8 @@ interface State {
   start: () => Promise<void>;
   /** switch the voice to this body (rebuilds its airway) */
   setBody: (b: BodyMix) => void;
+  /** Restore the complete Miku voice, including its singing expression. */
+  setMiku: () => void;
   /** show this body without rebuilding the voice yet (a drag in progress; setBody commits it) */
   previewBody: (b: BodyMix) => void;
   setSource: (v: Partial<VoiceSource>) => void;
@@ -121,8 +124,8 @@ export const useStore = create<State>((set, get) => ({
   started: false,
   starting: false,
   startError: null,
-  body: PRESETS.male,
-  source: { ...DEFAULT_SOURCE },
+  body: { ...MIKU_BODY },
+  source: { ...MIKU_SOURCE },
   artic: (() => {
     const tip = restTip(NEUTRAL.jaw, NEUTRAL.tbX, NEUTRAL.tbY);
     return { ...NEUTRAL, ttX: tip.x, ttY: tip.y };
@@ -131,7 +134,7 @@ export const useStore = create<State>((set, get) => ({
   volume: 0.8,
   hold: false,
   heldNotes: [],
-  view: { pressure: true, particles: true, grid: false, calipers: true, threeD: false },
+  view: { pressure: true, particles: true, grid: false, calipers: true, threeD: true },
   mode: "play",
   setMode: (m) => {
     const prev = get().mode;
@@ -274,6 +277,11 @@ export const useStore = create<State>((set, get) => ({
     engine.setBody(b);
   },
   previewBody: (b) => set({ body: b }),
+  setMiku: () => {
+    get().setBody({ ...MIKU_BODY });
+    get().setSource({ ...MIKU_SOURCE });
+    useSing.getState().setVibrato(MIKU_VIBRATO);
+  },
   setSource: (v) => {
     set((s) => ({ source: { ...s.source, ...v } }));
     engine.setSource(v);

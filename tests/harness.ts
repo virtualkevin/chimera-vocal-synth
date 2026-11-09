@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { initChimera } from "../src/wasm/chimera.ts";
 import { writeGestures, fromUtf8 } from "../src/wasm/wire.ts";
-import type { Gesture } from "../src/wasm/types.ts";
+import type { BodyMix, Gesture } from "../src/wasm/types.ts";
 
 export const WASM_PATH = new URL("../src/wasm/chimera.wasm", import.meta.url).pathname;
 const bytes = readFileSync(WASM_PATH);
@@ -42,6 +42,9 @@ export class WasmVoice {
   }
   setGate(level: number): void {
     this.x.engine_set_gate(this.h, level);
+  }
+  setBody(body: BodyMix): void {
+    this.x.engine_set_body(this.h, body.female, body.child);
   }
   /** Source values by name (crates/chimera-wasm engine_set_source order). */
   setSource(values: Record<string, number | boolean>): void {

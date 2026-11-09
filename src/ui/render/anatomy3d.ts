@@ -27,6 +27,8 @@ import { Beams, Poly } from "./beams3d.ts";
 import { bodyPoint, buildProfile, Gaze, jawAngle, wallX } from "./profile.ts";
 import { faceHandles, type FaceView, type ViewFlags } from "./anatomy.ts";
 import { Expression } from "./expression.ts";
+import { sameBody } from "../body.ts";
+import { MIKU_BODY } from "../voicePresets.ts";
 
 type Table = readonly (readonly [number, number])[];
 type V3 = [number, number, number];
@@ -206,6 +208,7 @@ interface Skinned {
 /** everything that only depends on the body, in the rest pose (jaw closed) */
 interface Rest {
   model: VoiceModel;
+  miku: boolean;
   head: Shape;
   condyle: Vec;
   /** the lips' patch reaches this far to each side (the shell leaves a hole for it) */
@@ -391,12 +394,91 @@ function buildRest(model: VoiceModel): Rest {
   }
 
   const fixed: Group[] = [];
+  const miku = sameBody(model.body, MIKU_BODY);
   const jaw: Group[] = [];
   const group = (into: Group[], color: string, width: number, alpha: number, fill: (L: Lines) => void, hot = false) => {
     const L = new Lines();
     fill(L);
     into.push({ lines: L.lines, color, width, alpha, hot });
   };
+  if (miku) {
+    // Costume geometry is in template cm, carried by the same head transform as the anatomy.
+    // It never changes the acoustic tract or the jaw's animated skin.
+    const point = (L: Lines, x: number, y: number, z: number) => L.p(B(x, y).x, By(y), z * k);
+    const teal = "#42e8dc";
+    group(fixed, teal, 1.3, 0.85, (L) => {
+      // Scalp meridians sweep into a low back hairline and a higher fringe at the front.
+      const cap = (a: number, u: number) => {
+        const theta = u * (1.72 - 0.38 * Math.cos(a));
+        point(L, 9.2 * Math.sin(theta) * Math.cos(a), 16 + 8.1 * Math.cos(theta), 8.2 * Math.sin(theta) * Math.sin(a));
+      };
+      for (let j = 0; j < 20; j++) {
+        for (let i = 1; i <= 24; i++) cap(j * Math.PI / 10, i / 24);
+        L.end();
+      }
+      for (const u of [0.25, 0.5, 0.75, 1]) {
+        for (let j = 0; j <= 64; j++) cap(j * Math.PI / 32, u);
+        L.end();
+      }
+      // Pointed, overlapping bangs; the centre lock stops above the bridge of the nose.
+      for (let j = -3; j <= 3; j++) {
+        const z = j * 1.7;
+        const x = 8.8 * Math.sqrt(1 - (z / 8.5) ** 2);
+        point(L, x - 2.0, 21.5 - Math.abs(j) * 0.35, z - 0.95);
+        point(L, x + 0.15, 18.2, z - 0.7);
+        point(L, x + 0.5, 16.3 + (Math.abs(j) % 2) * 0.8, z + 0.35);
+        point(L, x + 0.2, 19.3, z + 0.9);
+        point(L, x - 2.0, 21.5 - Math.abs(j) * 0.35, z + 0.95);
+        L.end();
+      }
+      // Long twin tails: tapered elliptical sections with longitudinal strands.
+      for (const side of [-1, 1]) {
+        const path = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(-1.8, 20.5, side * 7.8),
+          new THREE.Vector3(-3.4, 18, side * 10.5),
+          new THREE.Vector3(-4.2, 11, side * 12.3),
+          new THREE.Vector3(-3.1, 2, side * 13),
+          new THREE.Vector3(-0.8, -6.8, side * 11.3),
+        ]);
+        const strand = (u: number, a: number) => {
+          const c = path.getPoint(u);
+          const radius = (1 - u) * (1.1 + 3.5 * Math.sin(Math.PI * u)) + 0.04;
+          point(L, c.x + radius * 0.65 * Math.cos(a), c.y, c.z + radius * Math.sin(a));
+        };
+        for (let j = 0; j < 10; j++) {
+          for (let i = 0; i <= 40; i++) strand(i / 40, j * Math.PI / 5);
+          L.end();
+        }
+        for (let i = 0; i < 10; i++) {
+          for (let j = 0; j <= 24; j++) strand(i / 10, j * Math.PI / 12);
+          L.end();
+        }
+      }
+    });
+    group(fixed, V.pink, 1.6, 0.95, (L) => {
+      for (const side of [-1, 1]) {
+        // Angular pink hair clips, with a second inset frame for their dark centres.
+        for (const inset of [0, 0.35]) {
+          for (const [x, y] of [[-4 + inset, 22.4 - inset], [-0.1 - inset, 23.2 - inset], [1 - inset, 18.9 + inset], [-2.9 + inset, 18.1 + inset]]) point(L, x, y, side * 8.6);
+          L.end(true);
+        }
+        // Headphones sit outside the ears; a boom microphone follows the cheek.
+        for (const z of [7.4, 8.2]) {
+          for (const [x, y] of [[-5, 14.6], [-2, 15], [-1.5, 11], [-4.5, 10.6]]) point(L, x, y, side * z);
+          L.end(true);
+        }
+        for (let y = 11.5; y < 14; y += 0.65) {
+          point(L, -4.2, y, side * 8.25);
+          point(L, -2.5, y + 0.2, side * 8.25);
+          L.end();
+        }
+      }
+      for (const [x, y, z] of [[-1.6, 11.8, 8], [2, 9.8, 7.1], [6.5, 8.8, 4.4], [8.4, 8.8, 2.2]]) point(L, x, y, z);
+      L.end();
+      for (const [x, y, z] of [[8.2, 8.5, 2.2], [9.1, 8.5, 2.2], [9.1, 9.1, 2.2], [8.2, 9.1, 2.2]]) point(L, x, y, z);
+      L.end(true);
+    });
+  }
   /** a template outline on the side of the head, standing out from it by `off` (body cm) */
   const onSide = (L: Lines, pts: [number, number][], off: (i: number, n: number) => number, side: number) => {
     const curve = catmullRom(pts.map(([x, y]) => B(x, y)), 4);
@@ -608,7 +690,7 @@ function buildRest(model: VoiceModel): Rest {
   // eyes: the 2D view draws one on the midline; here they sit either side of the nose
   const eyeC = B(6.15, 15.35);
   const center = new THREE.Vector3(0.3 * k, (head.y0 + head.y1) / 2, 0);
-  return { model, head, condyle, lipHalf, center, shell, fixed, jaw, chin, eyes: [[eyeC.x, eyeC.y, 3.15 * k], [eyeC.x, eyeC.y, -3.15 * k]], eyeR: 1.05 * k };
+  return { model, miku, head, condyle, lipHalf, center, shell, fixed, jaw, chin, eyes: [[eyeC.x, eyeC.y, 3.15 * k], [eyeC.x, eyeC.y, -3.15 * k]], eyeR: (miku ? 1.45 : 1.05) * k };
 }
 
 // ------------------------------------------------------------------ the renderer
@@ -704,10 +786,12 @@ export class Anatomy3D {
     const r = this.restFor(model);
     const half = Math.tan((this.camera.fov * Math.PI) / 360);
     // fit the head's height (and its width in a narrow screen) at a male's size, so bodies compare
-    const d = 1.1 * Math.max(15.2 / half, 11 / (half * Math.max(0.3, this.camera.aspect)));
+    const d = 1.1 * Math.max((r.miku ? 17.5 : 15.2) / half, (r.miku ? 18 : 11) / (half * Math.max(0.3, this.camera.aspect)));
     const target = r.center.clone();
+    if (r.miku) target.y -= model.tract.scale; // include the tail tips below the neck
     // facing left: the same three-quarter view from the head's other side
-    const az = this.facing > 0 ? 0.62 : Math.PI - 0.62, el = 0.2;
+    const turn = r.miku ? 1.1 : 0.62;
+    const az = this.facing > 0 ? turn : Math.PI - turn, el = 0.2;
     return {
       target,
       home: target.clone().add(new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)).multiplyScalar(d)),
@@ -958,7 +1042,7 @@ export class Anatomy3D {
       }
       L.end();
       const style = [[V.blueMid, 1.0, 0.35], [V.blue, 1.0, 0.9 * seen], [V.blue, 1.0, 0.7 * seen], [V.blue, 1.25, 0.95], [V.blue, 1.05, 0.75], [V.blueMid, 1.3, 0.8]] as const;
-      L.lines.forEach((l, i) => this.beams.line(l, l.length / 3, style[i][0], style[i][1], { alpha: style[i][2] }));
+      L.lines.forEach((l, i) => this.beams.line(l, l.length / 3, rest.miku && (i === 1 || i === 2) ? "#42e8dc" : style[i][0], style[i][1], { alpha: style[i][2] }));
     }
   }
 

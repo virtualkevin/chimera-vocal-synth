@@ -7,6 +7,7 @@
 import { describe, expect, mock, test } from "bun:test";
 import { initEngine, WasmVoice } from "./harness.ts";
 import type { Gesture } from "../src/wasm/types.ts";
+import { MIKU_BODY, MIKU_SOURCE, MIKU_VIBRATO } from "../src/ui/voicePresets.ts";
 const MALE = { female: 0, child: 0 };
 
 await initEngine();
@@ -72,6 +73,35 @@ function run(sec: number) {
 }
 const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
 const cents = (f: number, midi: number) => 1200 * Math.log2(f / midiToHz(midi));
+
+test("Miku is the startup voice and restoring it sends the body before its custom pitch", async () => {
+  const { useStore } = await import("../src/ui/store.ts");
+  expect(useStore.getState().body).toEqual(MIKU_BODY);
+  expect(useStore.getState().source).toEqual(MIKU_SOURCE);
+  expect(useSing.getState().vibrato).toBe(MIKU_VIBRATO);
+  const sent: unknown[] = [];
+  const originalBody = engineStub.setBody, originalSource = engineStub.setSource;
+  engineStub.setBody = (b: unknown) => sent.push(["body", b]);
+  engineStub.setSource = (s: unknown) => sent.push(["source", s]);
+  try {
+    const ready = useStore.getState().start();
+    startAudio();
+    await ready;
+    expect(sent).toEqual([["body", MIKU_BODY], ["source", MIKU_SOURCE]]);
+    useStore.getState().setBody(MALE);
+    useStore.getState().setSource({ f0: 110, brightness: 0.1, roughness: 0.5 });
+    useSing.getState().setVibrato(60);
+    sent.length = 0;
+    useStore.getState().setMiku();
+    expect(sent).toEqual([["body", MIKU_BODY], ["source", MIKU_SOURCE]]);
+    expect(useStore.getState().source).toEqual(MIKU_SOURCE);
+    expect(useSing.getState().vibrato).toBe(MIKU_VIBRATO);
+  } finally {
+    engineStub.setBody = originalBody;
+    engineStub.setSource = originalSource;
+    useStore.setState({ started: false });
+  }
+});
 
 describe("Sing mode, live keys", () => {
   test("each key sings the next syllable at its pitch; legato, melisma and release to silence", () => {

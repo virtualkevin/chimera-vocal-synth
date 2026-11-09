@@ -15,6 +15,7 @@ import { EXHALE_LABEL } from "../wasm/engine.ts";
 import { DEMO_SONGS } from "../wasm/engine.ts";
 import type { Gesture } from "../wasm/types.ts";
 import { nearestBody, type BodyMix } from "./body.ts";
+import { MIKU_VIBRATO } from "./voicePresets.ts";
 
 /** A note on the piano roll, on the voice clock (s); t1 is null while it is held. */
 export interface RollNote {
@@ -53,7 +54,7 @@ export const useSing = create<SingState>((set, get) => ({
   lyrics: DEFAULT_LYRICS,
   syllables: lyricsToSyllables(DEFAULT_LYRICS),
   cursor: 0,
-  vibrato: 35,
+  vibrato: MIKU_VIBRATO,
   demo: null,
   demoAt: -1,
   setLyrics: (text) => {

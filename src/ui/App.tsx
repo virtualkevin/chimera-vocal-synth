@@ -20,7 +20,8 @@ import { playDemo, DEMO_SONGS } from "./singing.ts";
 import type { Mode } from "./store.ts";
 import type { BodyName } from "../worklet/protocol.ts";
 import { BodyPad } from "./components/BodyPad.tsx";
-import { bodyLabel, presetOf, PRESETS } from "./body.ts";
+import { bodyLabel, presetOf, PRESETS, sameBody } from "./body.ts";
+import { MIKU_BODY } from "./voicePresets.ts";
 
 // three.js only loads when the 3D view is first shown
 const AnatomyView3D = lazy(() => import("./components/AnatomyView3D.tsx").then((m) => ({ default: m.AnatomyView3D })));
@@ -39,6 +40,7 @@ function TopBar() {
   const start = useStore((s) => s.start);
   const body = useStore((s) => s.body);
   const setBody = useStore((s) => s.setBody);
+  const setMiku = useStore((s) => s.setMiku);
   const volume = useStore((s) => s.volume);
   const setVolume = useStore((s) => s.setVolume);
   const mode = useStore((s) => s.mode);
@@ -68,11 +70,12 @@ function TopBar() {
       />
       {mode !== "bestiary" && (
         <div className="body-control">
-          <Segmented<BodyName>
+          <Segmented<BodyName | "miku">
             label="Body"
-            value={presetOf(body)}
-            onChange={(b) => setBody(PRESETS[b])}
+            value={sameBody(body, MIKU_BODY) ? "miku" : presetOf(body)}
+            onChange={(b) => b === "miku" ? setMiku() : setBody(PRESETS[b])}
             options={[
+              { value: "miku", label: "Miku" },
               { value: "male", label: "Male" },
               { value: "female", label: "Female" },
               { value: "child", label: "Child" },

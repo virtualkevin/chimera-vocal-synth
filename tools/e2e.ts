@@ -26,11 +26,26 @@ async function run(viewport: { width: number; height: number }, tag: string) {
   page.on("pageerror", (e) => errors.push(`[${tag}] pageerror: ${e.message}`));
   await page.goto(url, { waitUntil: "networkidle" });
   await page.waitForTimeout(400);
+  const miku = page.getByRole("radio", { name: "Miku", exact: true });
+  if (await miku.getAttribute("aria-checked") !== "true") errors.push(`[${tag}] Miku is not the initial voice`);
   await page.screenshot({ path: `${outDir}/${tag}-0-idle.png` });
   const startBtn = page.getByRole("button", { name: /breathe in and start/i });
   await startBtn.click();
   await page.waitForTimeout(1800);
+  const pitch = () => page.evaluate(() => {
+    // @ts-expect-error debug handle
+    return window.__chimeraEngine?.latest?.t?.f0 ?? 0;
+  });
+  if (Math.abs(await pitch() - 261.625565) > 5) errors.push(`[${tag}] startup did not apply Miku's C4 pitch`);
+  await page.getByRole("radio", { name: "Male", exact: true }).click();
+  await page.waitForTimeout(500);
+  if (Math.abs(await pitch() - 110) > 5) errors.push(`[${tag}] male body did not restore its pitch`);
+  await miku.click();
+  await page.waitForTimeout(500);
+  if (Math.abs(await pitch() - 261.625565) > 5) errors.push(`[${tag}] Miku selector did not restore its C4 pitch`);
   await page.screenshot({ path: `${outDir}/${tag}-1-running.png` });
+  // The Miku wireframe opens in 3D; articulator dragging belongs to the flat view.
+  await page.getByRole("checkbox", { name: "3D", exact: true }).uncheck();
   // drag the tongue body handle via the canvas: find it by probing (center-ish of viewport)
   const box = await page.locator(".anatomy canvas").boundingBox();
   if (box) {

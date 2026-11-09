@@ -338,9 +338,9 @@ async function main() {
       await pages(`${m} (running)`);
       if (m === "play") {
         // the 3D face lays its readouts out on its own
-        await page.locator(".view-toggles .toggle", { hasText: "3D" }).click();
+        await page.getByRole("checkbox", { name: "3D", exact: true }).check();
         await check("play (running), 3D", 2500);
-        await page.locator(".view-toggles .toggle", { hasText: "3D" }).click();
+        await page.getByRole("checkbox", { name: "3D", exact: true }).uncheck();
       }
       if (m === "speak") {
         // the gestural score with a phrase in it, mid-utterance
