@@ -16,6 +16,7 @@ import { DEMO_SONGS } from "../wasm/engine.ts";
 import type { Gesture } from "../wasm/types.ts";
 import { nearestBody, sameBody, type BodyMix } from "./body.ts";
 import { MIKU_BODY, MIKU_VIBRATO, MIKU_DEMO_TRANSPOSE } from "./voicePresets.ts";
+import type { LocalSong } from "./songLibrary.ts";
 
 /** A note on the piano roll, on the voice clock (s); t1 is null while it is held. */
 export interface RollNote {
@@ -227,6 +228,8 @@ interface DemoRun {
   end: number;
   /** voice clock of plan time 0, once the worklet has it */
   offset: number | null;
+  /** MIDI melodies reuse one vowel instead of advancing through written lyrics. */
+  vowelOnly?: boolean;
 }
 
 let demoRun: DemoRun | null = null;
@@ -239,6 +242,38 @@ engine.onPlanned((m) => {
   d.offset = m.t0;
   d.times.forEach(([a, b], k) => addNote(d.midi[k], m.t0 + a, d.text[k], true, m.t0 + b - 0.02));
 });
+
+/** Schedule a local MIDI melody, preserving its tempo-map timing, rests and concert pitch. */
+export async function playLocalSong(song: LocalSong, body: BodyMix, ready?: () => Promise<void>): Promise<void> {
+  stopSinging();
+  const token = demoToken;
+  await ready?.();
+  if (token !== demoToken) return;
+  const gestures: Gesture[] = [];
+  const segments: ReturnType<typeof planSong>["segments"] = [];
+  const t0 = 0.35;
+  let end = t0;
+  // Plan continuous runs together; split at real rests so the engine releases the breath.
+  for (let i = 0; i < song.notes.length;) {
+    let j = i + 1;
+    while (j < song.notes.length && song.notes[j][1] - (song.notes[j - 1][1] + song.notes[j - 1][2]) < 0.035) j++;
+    const notes = song.notes.slice(i, j).map(([midi, start, duration], k) => ({
+      midi, beats: i + k + 1 < j ? song.notes[i + k + 1][1] - start : duration, syl: AH,
+    }));
+    const plan = planSong(notes, { body, bpm: 60, t0: t0 + song.notes[i][1], vibrato: useSing.getState().vibrato });
+    gestures.push(...plan.gestures);
+    segments.push(...plan.segments);
+    end = Math.max(end, plan.end);
+    i = j;
+  }
+  const id = engine.schedule({ gestures, segments, end });
+  demoRun = {
+    id, times: song.notes.map(([, start, duration]) => [t0 + start, t0 + start + duration]),
+    midi: song.notes.map(([midi]) => midi), text: song.notes.map(() => "ah"),
+    shown: song.notes.map(() => "ah"), parent: song.notes.map((_, i) => i), end, offset: null, vowelOnly: true,
+  };
+  useSing.setState({ lyrics: "ah", syllables: [AH], cursor: 0, demo: `local:${song.id}`, demoAt: -1 });
+}
 
 /** Sing a demo song (after `ready`, e.g. audio startup, resolves; unless stopped meanwhile). */
 export async function playDemo(name: string, body: BodyMix, ready?: () => Promise<void>): Promise<void> {
@@ -297,8 +332,8 @@ export function tickSinging(): void {
     useSing.setState({ demo: null, demoAt: -1 });
     return;
   }
-  let k = -1;
-  while (k + 1 < d.times.length && d.times[k + 1][0] <= t) k++;
+  let k = d.times.findIndex(([a, b]) => t >= a && t < b);
+  if (d.vowelOnly && k >= 0) k = 0;
   if (k !== useSing.getState().demoAt) useSing.setState({ demoAt: k });
 }
 

@@ -18,6 +18,11 @@ const errors: string[] = [];
 const logs: string[] = [];
 async function run(viewport: { width: number; height: number }, tag: string) {
   const page = await browser.newPage({ viewport, deviceScaleFactor: 1 });
+  // Original synthetic notes: exercise optional local songs without shipping downloaded music.
+  await page.route("**/shows/miku-songs/index.json", (route) => route.fulfill({ json: [{
+    id: "test", title: "Original test melody", artist: "Test", credit: "Test",
+    source: "https://example.com", excerpt: "Synthetic test", notes: [[69, 0, .5], [72, 1.3, .5]],
+  }] }));
   page.on("console", (m) => {
     const t = `${m.type()}: ${m.text()}`;
     if (m.type() === "error") errors.push(`[${tag}] ${t}`);
@@ -136,6 +141,17 @@ async function run(viewport: { width: number; height: number }, tag: string) {
   logs.push(`[${tag}] sing demo: rms ${demoRms.toFixed(4)} on "${demoNow}", after stop ${demoStopped.toFixed(4)}`);
   if (!(demoRms > 0.01) || !demoNow) errors.push(`[${tag}] demo song not singing (rms ${demoRms}, syllable ${demoNow})`);
   if (!(demoStopped < 1e-3)) errors.push(`[${tag}] demo still sounding after stop: ${demoStopped}`);
+  await page.getByLabel("Miku songs").focus();
+  await page.keyboard.down("a");
+  await page.waitForTimeout(300);
+  if (await rms() > .001) errors.push(`[${tag}] typing in the song selector played a piano key`);
+  await page.keyboard.up("a");
+  await page.getByRole("button", { name: "Play melody", exact: true }).click();
+  await page.waitForTimeout(600);
+  if (await rms() < .001) errors.push(`[${tag}] local melody made no sound`);
+  await page.getByRole("button", { name: "Stop melody", exact: true }).click();
+  await page.waitForTimeout(700);
+  if (await rms() > .001) errors.push(`[${tag}] local melody did not stop`);
   // bestiary: every creature, its first call, a key in held-voice mode, and the sustain toggle
   await page.getByRole("radio", { name: "Bestiary" }).click();
   await page.waitForTimeout(300);

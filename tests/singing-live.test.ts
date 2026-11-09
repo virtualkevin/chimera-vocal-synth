@@ -40,7 +40,7 @@ const engineStub = new Proxy(
   { get: (t, k) => (k in t ? t[k as string] : () => {}), set: (t, k, v) => ((t[k as string] = v), true) },
 );
 mock.module("../src/audio/AudioEngine.ts", () => ({ engine: engineStub }));
-const { useSing, singNoteOn, singNoteOff, playDemo, stopSinging } = await import("../src/ui/singing.ts");
+const { useSing, singNoteOn, singNoteOff, playDemo, playLocalSong, stopSinging } = await import("../src/ui/singing.ts");
 const gesturesOf = () => voice.score();
 /** breath the score is giving now (strength-weighted activation of breath gestures) */
 const breathNow = () => {
@@ -104,6 +104,32 @@ test("Miku is the startup voice and restoring it sends the body before its custo
 });
 
 describe("Sing mode, live keys", () => {
+  test("local MIDI preserves concert pitch, a real rest, and cancellation during audio startup", async () => {
+    const song = { id: "test", title: "Test", artist: "Test", credit: "Test", source: "https://example.com", excerpt: "Test", notes: [[69, 0, .5], [72, 1.3, .5]] as [number, number, number][] };
+    voice = new WasmVoice(FS);
+    voice.setBody(MIKU_BODY);
+    voice.setSource({ ...MIKU_SOURCE });
+    await playLocalSong(song, MIKU_BODY);
+    expect(useSing.getState().demo).toBe("local:test");
+    const first = run(.8);
+    expect(Math.abs(cents(median(first.f0.slice(160, 240)), 69))).toBeLessThan(30);
+    const rest = run(.7);
+    expect(Math.max(...rest.late(rest.rms))).toBeLessThan(.001);
+    const second = run(.6);
+    expect(Math.abs(cents(median(second.late(second.f0)), 72))).toBeLessThan(30);
+    expect(Math.max(...second.rms)).toBeGreaterThan(.001);
+    stopSinging();
+    run(.5);
+    expect(Math.max(...run(.2).rms)).toBeLessThan(.001);
+    let ready!: () => void;
+    const pending = playLocalSong(song, MIKU_BODY, () => new Promise<void>((r) => { ready = r; }));
+    stopSinging();
+    ready();
+    await pending;
+    expect(useSing.getState().demo).toBeNull();
+    expect(Math.max(...run(.8).rms)).toBeLessThan(.001);
+  });
+
   test("Miku's demo uses the higher register while live MIDI keeps concert pitch", async () => {
     voice = new WasmVoice(FS);
     voice.setBody(MIKU_BODY);

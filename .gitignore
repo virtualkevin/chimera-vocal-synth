@@ -3,6 +3,7 @@ dist
 out
 *.wav
 .DS_Store
+__pycache__/
 target/
 src/wasm/chimera.wasm
 
